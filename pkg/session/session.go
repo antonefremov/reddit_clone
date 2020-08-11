@@ -1,27 +1,32 @@
 package session
 
-/*
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
-	"fmt"
+	"time"
 )
 
 type Session struct {
-	ID     string
-	UserID string
+	ID      string
+	UserID  string
+	Expires time.Time
 }
 
-func NewSession(userID string) *Session {
-	// лучше генерировать из заданного алфавита, но так писать меньше и для учебного примера ОК
-	randID := make([]byte, 16)
-	rand.Read(randID)
+const IDLength int = 32
+
+func NewSession(userID string) (*Session, error) {
+	id, err := generateRandomString(IDLength)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Session{
-		ID:     fmt.Sprintf("%x", randID),
-		UserID: userID,
-	}
+		ID:      id,
+		UserID:  userID,
+		Expires: time.Now().Add(time.Hour),
+	}, nil
 }
 
 var (
@@ -39,4 +44,9 @@ func SessionFromContext(ctx context.Context) (*Session, error) {
 	}
 	return sess, nil
 }
-*/
+
+func generateRandomString(length int) (string, error) {
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
+	return base64.URLEncoding.EncodeToString(bytes), err
+}

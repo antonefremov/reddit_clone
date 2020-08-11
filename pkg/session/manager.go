@@ -1,74 +1,57 @@
 package session
 
-/*
 import (
-	"net/http"
-	"sync"
+	"database/sql"
 	"time"
 )
 
+// SessionsManager manages sessions
 type SessionsManager struct {
-	data map[string]*Session
-	mu   *sync.RWMutex
+	// data map[string]*Session
+	DB *sql.DB
 }
 
-func NewSessionsMem() *SessionsManager {
+// NewSessionsManager constructs a new Sess Man
+func NewSessionsManager(db *sql.DB) *SessionsManager {
 	return &SessionsManager{
-		data: make(map[string]*Session, 10),
-		mu:   &sync.RWMutex{},
+		DB: db,
 	}
 }
 
-func (sm *SessionsManager) Check(r *http.Request) (*Session, error) {
-	sessionCookie, err := r.Cookie("session_id")
-	if err == http.ErrNoCookie {
-		return nil, ErrNoAuth
-	}
-
-	sm.mu.RLock()
-	sess, ok := sm.data[sessionCookie.Value]
-	sm.mu.RUnlock()
-
-	if !ok {
-		return nil, ErrNoAuth
-	}
-
-	return sess, nil
-}
-
-func (sm *SessionsManager) Create(w http.ResponseWriter, userID string) (*Session, error) {
-	sess := NewSession(userID)
-
-	sm.mu.Lock()
-	sm.data[sess.ID] = sess
-	sm.mu.Unlock()
-
-	cookie := &http.Cookie{
-		Name:    "session_id",
-		Value:   sess.ID,
-		Expires: time.Now().Add(90 * 24 * time.Hour),
-		Path:    "/",
-	}
-	http.SetCookie(w, cookie)
-	return sess, nil
-}
-
-func (sm *SessionsManager) DestroyCurrent(w http.ResponseWriter, r *http.Request) error {
-	sess, err := SessionFromContext(r.Context())
+// Check validates a session by its id
+func (sm *SessionsManager) Check(sessionID string) (*Session, error) {
+	sess := &Session{}
+	var expiresUnix int64
+	err := sm.DB.
+		QueryRow("SELECT id, userId, expires FROM sessions WHERE id = ?", sessionID).
+		Scan(&sess.ID, &sess.UserID, &expiresUnix)
 	if err != nil {
-		return err
+		return nil, ErrNoAuth
 	}
 
-	sm.mu.Lock()
-	delete(sm.data, sess.ID)
-	sm.mu.Unlock()
-
-	cookie := http.Cookie{
-		Name:    "session_id",
-		Expires: time.Now().AddDate(0, 0, -1),
-		Path:    "/",
+	sess.Expires = time.Unix(expiresUnix, 0)
+	if sess.Expires.Unix() < time.Now().Unix() {
+		return nil, ErrNoAuth
 	}
-	http.SetCookie(w, &cookie)
-	return nil
+
+	return sess, nil
 }
-*/
+
+// Create creates a new session for the passed userID
+func (sm *SessionsManager) Create(userID string) (*Session, error) {
+	sess, err := NewSession(userID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = sm.DB.Exec(
+		"INSERT INTO sessions (`id`, `userId`, `expires`) VALUES (?, ?, ?)",
+		sess.ID,
+		sess.UserID,
+		sess.Expires.Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}

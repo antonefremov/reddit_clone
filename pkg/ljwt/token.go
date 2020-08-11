@@ -12,7 +12,8 @@ type TokenUser struct {
 
 // Claims is the data structure inside of the JWT token
 type Claims struct {
-	User TokenUser `json:"user"`
+	User      TokenUser `json:"user"`
+	SessionID string    `json:"sessionId"`
 	jwt.StandardClaims
 }
 
